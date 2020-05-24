@@ -4,11 +4,12 @@ from subprocess import run, PIPE
 from json import loads, dumps
 from time import time, sleep, strftime
 from threading import Thread
+from argparse import ArgumentParser
 import requests
 
-ELASTIC_URL = f"http://localhost:9200/ifaces-stats-{strftime('%Y-%m-%d')}"
-BULK_URL = f"http://localhost:9200/ifaces-stats-{strftime('%Y-%m-%d')}/_bulk"
-MAPPING_URL = f"http://localhost:9200/ifaces-stats-{strftime('%Y-%m-%d')}/_mapping"
+ELASTIC_URL = f"/ifaces-stats-{strftime('%Y-%m-%d')}"
+BULK_URL = f"/ifaces-stats-{strftime('%Y-%m-%d')}/_bulk"
+MAPPING_URL = f"/ifaces-stats-{strftime('%Y-%m-%d')}/_mapping"
 HEADERS = {"Content-Type": "application/json"}
 INDEX_SETTINGS = {"settings": {"number_of_shards": 2, "number_of_replicas": 2}}
 INDEX_MAPPING = {
@@ -39,9 +40,11 @@ INDEX_MAPPING = {
 }
 
 
-def get_stats_iface(iface):
+def get_stats_iface(iface, netns, ifstat_binary):
+    netns_cmd = f"ip netns exec {netns} " if netns else ""
+    ifstat_bin = f"{ifstat_binary}" if ifstat_binary else "ifstat"
     output = run(
-        f"./ifstat-nxos.bin -a -s -e -z -j -p {iface}",
+        f"{netns_cmd}{ifstat_bin} -a -s -e -z -j -p {iface}",
         shell=True,
         check=True,
         stdout=PIPE,
@@ -50,14 +53,18 @@ def get_stats_iface(iface):
     return loads(output)
 
 
-def get_stats_all_ifaces(ifaces):
+def get_stats_all_ifaces(ifaces, netns, ifstat_binary):
     for iface in ifaces:
-        yield get_stats_iface(iface)["kernel"][iface]
+        yield get_stats_iface(iface, netns, ifstat_binary)["kernel"][iface]
 
 
-def loading_ifaces():
+def loading_ifaces(ifaces_list, netns):
+    if ifaces_list:
+        return ifaces_list.split(',')
+
+    netns_cmd = f"ip netns exec {netns} " if netns else ""
     ifaces = run(
-        f"ip address show up | grep mtu | cut -f2 -d ':' | cut -f1 -d '@' | tr -d '\n'",
+        f"{netns_cmd}ip address show up | grep mtu | cut -f2 -d ':' | cut -f1 -d '@' | tr -d '\n'",
         shell=True,
         check=True,
         stdout=PIPE,
@@ -97,7 +104,7 @@ def convert_stats_to_bulk(stats):
     return stats_to_send
 
 
-def ensure_index_and_mapping():
+def ensure_index_and_mapping(elastic_base_url):
     """
 curl -X PUT "localhost:9200/twitter?pretty" -H 'Content-Type: application/json' -d'
 {
@@ -115,26 +122,26 @@ curl -XPUT "http://localhost:9200/twitter/_mapping" -H 'Content-Type: applicatio
  }
 }'
     """
-    output = requests.put(url=ELASTIC_URL, headers=HEADERS, data=dumps(INDEX_SETTINGS))
-    # print(dumps(output.json(),indent=2))
-    output = requests.put(url=MAPPING_URL, headers=HEADERS, data=dumps(INDEX_MAPPING))
-    # print(dumps(output.json(),indent=2))
+    output = requests.put(url=elastic_base_url+ELASTIC_URL, headers=HEADERS, data=dumps(INDEX_SETTINGS))
+    #print(dumps(output.json(),indent=2))
+    output = requests.put(url=elastic_base_url+MAPPING_URL, headers=HEADERS, data=dumps(INDEX_MAPPING))
+    #print(dumps(output.json(),indent=2))
 
 
-def send_elastic(stats):
+def send_elastic(stats, elastic_base_url):
     """
     """
-    ensure_index_and_mapping()
+    ensure_index_and_mapping(elastic_base_url)
 
     stats_to_send = convert_stats_to_bulk(stats)
 
     # data_to_send = dumps(stats_to_send) + "\n" #New line needed at the end of a bulk req
     # print(stats_to_send)
-    output = requests.post(url=BULK_URL, headers=HEADERS, data=stats_to_send)
+    output = requests.post(url=elastic_base_url+BULK_URL, headers=HEADERS, data=stats_to_send)
     # print(dumps(output.json(),indent=2))
 
 
-def ifaces_polling(ifaces):
+def ifaces_polling(ifaces, netns, es_url, ifstat_binary):
 
     stats_to_send = {}
 
@@ -142,9 +149,9 @@ def ifaces_polling(ifaces):
     while True:
         sleep(0.1)
         current_time = time()
-        stats_to_send[current_time] = dict(zip(ifaces, get_stats_all_ifaces(ifaces)))
+        stats_to_send[current_time] = dict(zip(ifaces, get_stats_all_ifaces(ifaces, netns, ifstat_binary)))
         if current_time - previous_time > 5:
-            thread = Thread(target=send_elastic, args=(stats_to_send,))
+            thread = Thread(target=send_elastic, args=(stats_to_send,es_url,))
             thread.start()
             stats_to_send = {}
             previous_time = current_time
@@ -152,7 +159,41 @@ def ifaces_polling(ifaces):
 
 
 def main():
-    ifaces_polling(loading_ifaces())
+    parser = ArgumentParser(
+        description="Collects stats and send them to an elastic cluster"
+    )
+    parser.add_argument(
+        "-u",
+        "--url",
+        type=str,
+        help="URL of the elastic cluster api",
+        default="http://localhost:9200",
+    )
+    parser.add_argument(
+        "-n",
+        "--netns",
+        type=str,
+        help="Namespace on which the interfaces should be retrieved",
+    )
+    parser.add_argument(
+        "-i",
+        "--ifaces",
+        type=str,
+        help="List of interfaces that must be monitored.\n \
+             By default, all the interfaces of the namespace are monitored. \n"
+    )
+    parser.add_argument(
+        "-b",
+        "--binary",
+        type=str,
+        help="For now, 'ifstat' binary is used to retrieve interface stats. \n \
+            You can specify the path of the binary if you don't want to use the \n \
+            default binary of your system."
+    )
+
+    args = parser.parse_args()
+
+    ifaces_polling(loading_ifaces(args.ifaces, args.netns),args.netns, args.url, args.binary)
 
 
 if __name__ == "__main__":
