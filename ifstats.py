@@ -7,9 +7,10 @@ from threading import Thread
 from argparse import ArgumentParser
 import requests
 
-ELASTIC_URL = f"/ifaces-stats-{strftime('%Y-%m-%d')}"
-BULK_URL = f"/ifaces-stats-{strftime('%Y-%m-%d')}/_bulk"
-MAPPING_URL = f"/ifaces-stats-{strftime('%Y-%m-%d')}/_mapping"
+INDEX_NAME = f"ifaces-stats-{strftime('%Y-%m-%d')}-2"
+ELASTIC_URL = f"/{INDEX_NAME}"
+BULK_URL = f"{ELASTIC_URL}/_bulk"
+MAPPING_URL = f"{ELASTIC_URL}/_mapping"
 HEADERS = {"Content-Type": "application/json"}
 INDEX_SETTINGS = {"settings": {"number_of_shards": 2, "number_of_replicas": 2}}
 INDEX_MAPPING = {
@@ -18,8 +19,8 @@ INDEX_MAPPING = {
         "iface": {"type": "keyword"},
         "rx_packets": {"type": "long"},
         "tx_packets": {"type": "long"},
-        "rx_bytes": {"type": "long"},
-        "tx_bytes": {"type": "long"},
+        "rx_bits": {"type": "long"},
+        "tx_bits": {"type": "long"},
         "rx_errors": {"type": "long"},
         "tx_errors": {"type": "long"},
         "rx_dropped": {"type": "long"},
@@ -95,6 +96,10 @@ def convert_stats_to_bulk(stats):
             bulk_line_value_dict["iface"] = iface
             # Insert all the values of the interface
             for key, value in stats.items():
+                if "bytes" in key: 
+                    kbits = key[:3] + "bits"
+                    bulk_line_value_dict[kbits] = value * 8
+                    continue
                 bulk_line_value_dict[key] = value
             # stats_to_send += dumps(bulk_line_index_dict) + "\n"
             # stats_to_send += dumps(bulk_line_value_dict) + "\n"
@@ -138,7 +143,7 @@ def send_elastic(stats, elastic_base_url):
     # data_to_send = dumps(stats_to_send) + "\n" #New line needed at the end of a bulk req
     # print(stats_to_send)
     output = requests.post(url=elastic_base_url+BULK_URL, headers=HEADERS, data=stats_to_send)
-    # print(dumps(output.json(),indent=2))
+    #print(dumps(output.json(),indent=2))
 
 
 def ifaces_polling(ifaces, netns, es_url, ifstat_binary):
@@ -147,7 +152,7 @@ def ifaces_polling(ifaces, netns, es_url, ifstat_binary):
 
     previous_time = time()
     while True:
-        sleep(0.1)
+        sleep(0.2)
         current_time = time()
         stats_to_send[current_time] = dict(zip(ifaces, get_stats_all_ifaces(ifaces, netns, ifstat_binary)))
         if current_time - previous_time > 5:
