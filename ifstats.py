@@ -146,16 +146,16 @@ def send_elastic(stats, elastic_base_url):
     #print(dumps(output.json(),indent=2))
 
 
-def ifaces_polling(ifaces, netns, es_url, ifstat_binary):
+def ifaces_polling(ifaces, netns, es_url, ifstat_binary, send_interval, retrieval_interval):
 
     stats_to_send = {}
 
     previous_time = time()
     while True:
-        sleep(0.2)
+        sleep(retrieval_interval)
         current_time = time()
         stats_to_send[current_time] = dict(zip(ifaces, get_stats_all_ifaces(ifaces, netns, ifstat_binary)))
-        if current_time - previous_time > 5:
+        if current_time - previous_time > send_interval:
             thread = Thread(target=send_elastic, args=(stats_to_send,es_url,))
             thread.start()
             stats_to_send = {}
@@ -195,10 +195,30 @@ def main():
             You can specify the path of the binary if you don't want to use the \n \
             default binary of your system."
     )
+    parser.add_argument(
+        "-s",
+        "--send_interval",
+        type=int,
+        help="Interval at which bulk requests should be sent to elastic \n \
+                Default : 300 seconds",
+        default=300
+    )
+    parser.add_argument(
+        "-r",
+        "--retrieval_interval",
+        type=float,
+        help="Interval at which stats should be retrieved from interfaces \n \
+                Default : 200 milliseconds",
+        default=200,
+    )
 
     args = parser.parse_args()
 
-    ifaces_polling(loading_ifaces(args.ifaces, args.netns),args.netns, args.url, args.binary)
+    millis = args.retrieval_interval / 1000
+
+    ifaces = loading_ifaces(args.ifaces, args.netns)
+
+    ifaces_polling(ifaces, args.netns, args.url, args.binary, args.send_interval, millis)
 
 
 if __name__ == "__main__":
