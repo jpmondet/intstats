@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 from subprocess import run, PIPE
+from socket import gethostname
 from json import loads, dumps
 from time import time, sleep, strftime
 from threading import Thread
@@ -16,6 +17,7 @@ INDEX_SETTINGS = {"settings": {"number_of_shards": 2, "number_of_replicas": 2}}
 INDEX_MAPPING = {
     "properties": {
         "timestamp": {"type": "date", "format": "epoch_millis"},
+        "hostname": {"type": "keyword"},
         "iface": {"type": "keyword"},
         "rx_packets": {"type": "long"},
         "tx_packets": {"type": "long"},
@@ -86,6 +88,7 @@ def convert_stats_to_bulk(stats):
 
     bulk_line_index_dict = {"index": {}}
     bulk_line_value_dict = {}
+    hostname = gethostname()
     stats_to_send = ""
 
     for timing, ifaces_data in stats.items():
@@ -93,6 +96,7 @@ def convert_stats_to_bulk(stats):
 
         for iface, stats in ifaces_data.items():
             bulk_line_value_dict["timestamp"] = milli_timing
+            bulk_line_value_dict["hostname"] = hostname
             bulk_line_value_dict["iface"] = iface
             # Insert all the values of the interface
             for key, value in stats.items():
