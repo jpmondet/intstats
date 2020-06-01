@@ -136,13 +136,17 @@ curl -XPUT "http://localhost:9200/twitter/_mapping" -H 'Content-Type: applicatio
 def send_elastic(stats, elastic_base_url):
     """
     """
-    ensure_index_and_mapping(elastic_base_url)
 
     stats_to_send = convert_stats_to_bulk(stats)
+    # print(stats_to_send)
 
     # data_to_send = dumps(stats_to_send) + "\n" #New line needed at the end of a bulk req
-    # print(stats_to_send)
-    output = requests.post(url=elastic_base_url+BULK_URL, headers=HEADERS, data=stats_to_send)
+    try:
+        ensure_index_and_mapping(elastic_base_url)
+        output = requests.post(url=elastic_base_url+BULK_URL, headers=HEADERS, data=stats_to_send)
+    except requests.exceptions.ConnectionError: 
+        print("Wasn't able to send this time... Passing")
+        pass
     #print(dumps(output.json(),indent=2))
 
 
