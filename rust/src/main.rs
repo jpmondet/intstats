@@ -2,7 +2,91 @@
 extern crate json;
 
 use clap::{Arg, App};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::io::Error;
+
+fn get_ifaces() -> Result<std::vec::Vec<str>,Error> {
+
+
+    let mut ifaces_child = Command::new("ip")
+            .arg("address")
+            .arg("show")
+            .arg("up")
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("ip cmd failed");
+    //let ifaces_stdout = ifaces_child.wait_with_output()?;
+    //println!(
+    //        "iface :{:#?}",String::from_utf8(ifaces_stdout.stdout).unwrap()
+    //);
+
+    if let Some(ifaces) = ifaces_child.stdout.take() {
+        let mut mtu_child = Command::new("grep")
+                .arg("mtu")
+                .stdin(ifaces)
+                .stdout(Stdio::piped())
+                .spawn()
+                .expect("grep failed");
+        //let mtu_stdout = mtu_child.wait_with_output()?;
+        //println!(
+        //        "iface :{:#?}",String::from_utf8(mtu_stdout.stdout).unwrap()
+        //);
+
+        ifaces_child.wait()?;
+
+        if let Some(mtu) = mtu_child.stdout.take() {
+            let mut cut_child = Command::new("cut")
+                    .arg("-f2")
+                    .arg("-d")
+                    .arg(":")
+                    .stdin(mtu)
+                    .stdout(Stdio::piped())
+                    .spawn()
+                    .expect("Cut failed");
+
+            mtu_child.wait()?;
+
+            if let Some(cut) = cut_child.stdout.take() {
+                let mut cut2_child = Command::new("cut")
+                        .arg("-f1")
+                        .arg("-d")
+                        .arg("@")
+                        .stdin(cut)
+                        .stdout(Stdio::piped())
+                        .spawn()?;
+
+                cut_child.wait()?;
+                println!(
+                    "iface :{:#?}",cut_child
+                );
+
+                if let Some(cut2) = cut2_child.stdout.take() {
+                    let mut tr_child = Command::new("tr")
+                            .arg("-d")
+                            .arg("'\n'")
+                            .stdin(cut2)
+                            .stdout(Stdio::piped())
+                            .spawn()?;
+
+                    let tr_stdout = tr_child.wait_with_output()?;
+                    
+                    cut2_child.wait()?;
+                    println!(
+                            "iface :{:#?}",String::from_utf8(tr_stdout.stdout).unwrap()
+                    );
+                    let split = String::from_utf8(tr_stdout.stdout).unwrap().split(' ');
+                    let mut vec_ifaces = Vec::new();
+                    vec_ifaces = split.collect();
+                    return Ok(vec_ifaces)
+                }
+            }
+        }
+
+    }
+
+    return Err(Vec::new());
+    
+}
 
 fn main() {
     let matches = App::new("Ifstatspy")
@@ -74,75 +158,9 @@ fn main() {
         let split = interfaces.split(',');
         ifaces_vec = split.collect();
     } else {
-        let output = Command::new("ip")
-                .arg("address")
-                .arg("show")
-                .arg("up")
-                .arg("|")
-                .arg("grep")
-                .arg("mtu")
-                .output()
-                .expect("failed to execute process");
-        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-        /*
-Shows up to the 10th biggest files and subdirectories in the current working directory. It is equivalent to running: du -ah . | sort -hr | head -n 10.
-
-Commands represent a process. Output of a child process is captured with a Stdio::piped between parent and child.
-
-use error_chain::error_chain;
-
-use std::process::{Command, Stdio};
-
-error_chain! {
-    foreign_links {
-        Io(std::io::Error);
-        Utf8(std::string::FromUtf8Error);
+        let result = get_ifaces();
+        println!("The interfaces that will be monitored : {:#?}", result);
     }
-}
-
-fn main() -> Result<()> {
-    let directory = std::env::current_dir()?;
-    let mut du_output_child = Command::new("du")
-        .arg("-ah")
-        .arg(&directory)
-        .stdout(Stdio::piped())
-        .spawn()?;
-
-    if let Some(du_output) = du_output_child.stdout.take() {
-        let mut sort_output_child = Command::new("sort")
-            .arg("-hr")
-            .stdin(du_output)
-            .stdout(Stdio::piped())
-            .spawn()?;
-
-        du_output_child.wait()?;
-
-        if let Some(sort_output) = sort_output_child.stdout.take() {
-            let head_output_child = Command::new("head")
-                .args(&["-n", "10"])
-                .stdin(sort_output)
-                .stdout(Stdio::piped())
-                .spawn()?;
-
-            let head_stdout = head_output_child.wait_with_output()?;
-
-            sort_output_child.wait()?;
-
-            println!(
-                "Top 10 biggest files and directories in '{}':\n{}",
-                directory.display(),
-                String::from_utf8(head_stdout.stdout).unwrap()
-            );
-        }
-    }
-
-    Ok(())
-}
-*/
-        
-        
-    }
-    //println!("The interfaces that will be monitored : {:#?}", ifaces_vec);
 
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")
