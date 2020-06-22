@@ -22,8 +22,8 @@ struct Bulk_line_intstats {
     tx_packets          u64 [json:"tx_packets"]
     rx_bytes            u64 [json:"rx_bytes"]
     tx_bytes            u64 [json:"tx_bytes"]
-    rx_bits             u64 [json:"rx_bytes"]
-    tx_bits             u64 [json:"tx_bytes"]
+    rx_bits             u64 [json:"rx_bits"]
+    tx_bits             u64 [json:"tx_bits"]
     rx_errors           u64 [json:"rx_errors"]
     tx_errors           u64 [json:"tx_errors"]
     rx_dropped          u64 [json:"rx_dropped"]
@@ -56,6 +56,8 @@ fn send_request(url string, data string, method string) {
   if resp.status_code > 299 {
     println(resp.text)
   }
+  //println(req)
+  //println(resp)
 }
 
 fn  ensure_index_and_mapping(url string) {
@@ -112,7 +114,7 @@ fn ifaces_monitoring(ifaces_list []string, binary string, netns string, retrieva
   mut stopwatch := time.new_stopwatch(time.StopWatchOptions{true})
   stopwatch.start()
   mut bli := Bulk_line_intstats{}
-  mut timestamp := u64(time.now().unix_time()) * 1000
+  mut timestamp := u64(time.utc().unix_time()) * 1000
   mut batch := []Bulk_line_intstats{}
   // Loop forever
   for {
@@ -145,7 +147,7 @@ fn ifaces_monitoring(ifaces_list []string, binary string, netns string, retrieva
     if stopwatch.elapsed().seconds() > send_interval {
       go send_to_elastic(batch, url)
       stopwatch.restart()
-      timestamp = u64(time.now().unix_time()) * 1000
+      timestamp = u64(time.utc().unix_time()) * 1000
       batch = []Bulk_line_intstats{}
     }
     time.sleep_ms(retrieval_interval)
