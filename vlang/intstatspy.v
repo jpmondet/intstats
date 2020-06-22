@@ -22,6 +22,8 @@ struct Bulk_line_intstats {
     tx_packets          u64 [json:"tx_packets"]
     rx_bytes            u64 [json:"rx_bytes"]
     tx_bytes            u64 [json:"tx_bytes"]
+    rx_bits             u64 [json:"rx_bytes"]
+    tx_bits             u64 [json:"tx_bytes"]
     rx_errors           u64 [json:"rx_errors"]
     tx_errors           u64 [json:"tx_errors"]
     rx_dropped          u64 [json:"rx_dropped"]
@@ -135,6 +137,8 @@ fn ifaces_monitoring(ifaces_list []string, binary string, netns string, retrieva
       bli.hostname = hostname
       bli.iface = iface
       bli.timestamp = timestamp + u64(stopwatch.elapsed().milliseconds())
+      bli.rx_bits = bli.rx_bytes * 8
+      bli.tx_bits = bli.tx_bytes * 8
       batch.push(bli)
     }
 
