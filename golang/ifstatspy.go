@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"text/template"
 	"time"
 )
 
@@ -296,6 +297,70 @@ func ensureIndexAndMapping(url string) {
 	//fmt.Println(indexMapping)
 	sendRequest(url, indexSettings, "PUT")
 	sendRequest(url+"/_mapping", indexMapping, "PUT")
+}
+
+func autoCreationKibanaDashboard(url string) {
+	// Not ready yet
+	// Change Visualizations to have auto time span
+
+	type DashboardInfos struct {
+		KibanaVersion string
+		DashId        string
+	}
+
+	dash := DashboardInfos{
+		"7.6.2",
+		"e43413e0-a354-11ea-befe-09f9d53a9377",
+	}
+
+	dashTmpl, err := template.New("dashboard").Parse(`
+	{
+  "version": "{{.KibanaVersion}}",
+  "objects": [
+    {
+      "id": "{{.DashId}}",
+      "type": "dashboard",
+      "updated_at": "2020-06-19T06:21:56.652Z",
+      "version": "WzEwMjMsMTNd",
+      "attributes": {
+        "title": "rx_packets_TEST2",
+        "hits": 0,
+        "description": "",
+        "panelsJSON": "[{\"version\":\"7.6.2\",\"gridData\":{\"w\":24,\"h\":15,\"x\":0,\"y\":0,\"i\":\"63f301a8-a15e-4ba1-aad2-2bb443c72fb5\"},\"panelIndex\":\"63f301a8-a15e-4ba1-aad2-2bb443c72fb5\",\"embeddableConfig\":{\"title\":\"rx_packets_TEST2\"},\"title\":\"rx_packets_TEST2\",\"panelRefName\":\"panel_0\"}]",
+        "optionsJSON": "{\"hidePanelTitles\":false,\"useMargins\":true}",
+        "version": 1,
+        "timeRestore": false,
+        "kibanaSavedObjectMeta": {
+          "searchSourceJSON": "{\"query\":{\"query\":\"hostname : \\\"TEST2\\\" \",\"language\":\"kuery\"},\"filter\":[{\"meta\":{\"alias\":null,\"negate\":false,\"disabled\":false,\"type\":\"phrase\",\"key\":\"hostname\",\"params\":{\"query\":\"TEST2\"},\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.filter[0].meta.index\"},\"query\":{\"match_phrase\":{\"hostname\":\"TEST2\"}},\"$state\":{\"store\":\"appState\"}}]}"
+        }
+      },
+      "references": [
+        {
+          "name": "kibanaSavedObjectMeta.searchSourceJSON.filter[0].meta.index",
+          "type": "index-pattern",
+          "id": "9eb1cfc0-b0af-11ea-ab07-8d20dd347cee"
+        },
+        {
+          "name": "panel_0",
+          "type": "visualization",
+          "id": "bdbb23c0-a354-11ea-befe-09f9d53a9377"
+        }
+      ],
+      "migrationVersion": {
+        "dashboard": "7.3.0"
+      }
+    }
+  ]
+	}
+	`)
+	if err != nil {
+		panic(err)
+	}
+	err = dashTmpl.Execute(os.Stdout, dash)
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func sendRequest(url string, data []byte, method string) {
