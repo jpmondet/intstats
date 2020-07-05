@@ -105,7 +105,7 @@ func main() {
 
 	ensureIndexAndMapping(*url)
 
-	autoCreationKibanaDashboard(*kibanaUrl+"api/kibana/dashboards/import", *hostname, ifacesList)
+	autoCreationKibanaDashboard(*kibanaUrl, *hostname, ifacesList)
 
 	*url = *url + "/_bulk"
 
@@ -310,12 +310,14 @@ func autoCreationKibanaDashboard(url string, hostname_device string, ifacesList 
 		Hostname string
 		Ifaces   []string
 		Length   int
+		Url      string
 	}
 
 	dash := DashboardInfos{
 		hostname_device,
 		ifacesList,
 		len(ifacesList) - 1,
+		url,
 	}
 
 	dashTmpl, err := template.New("dashboard").Parse(`
@@ -329,7 +331,7 @@ func autoCreationKibanaDashboard(url string, hostname_device string, ifacesList 
 				"optionsJSON": "{\"hidePanelTitles\":false,\"useMargins\":true}",
 				"timeRestore": false,
 				"kibanaSavedObjectMeta": {
-					"searchSourceJSON": "{\"query\":{\"language\":\"kuery\",\"query\":\"hostname : \\\"{{.Hostname}}\\\" \"},\"filter\":[{{ $length := len .Ifaces }}{{range $i, $iface := .Ifaces}}{\"$state\":{\"store\":\"globalState\"},\"meta\":{\"alias\":null,\"disabled\":true,\"key\":\"iface\",\"negate\":false,\"params\":{\"query\":\"{{$iface}}\"},\"type\":\"phrase\",\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.filter[0].meta.index\"},\"query\":{\"match_phrase\":{\"iface\":\"{{$iface}}\"}}}{{if eq $length $i}}{{else}},{{end}}{{end}}]}"
+					"searchSourceJSON": "{\"query\":{\"language\":\"kuery\",\"query\":\"hostname : \\\"{{.Hostname}}\\\" \"},\"filter\":[{{ $length := .Length }}{{range $i, $iface := .Ifaces}}{\"$state\":{\"store\":\"globalState\"},\"meta\":{\"alias\":null,\"disabled\":true,\"key\":\"iface\",\"negate\":false,\"params\":{\"query\":\"{{$iface}}\"},\"type\":\"phrase\",\"indexRefName\":\"kibanaSavedObjectMeta.searchSourceJSON.filter[0].meta.index\"},\"query\":{\"match_phrase\":{\"iface\":\"{{$iface}}\"}}}{{if eq $length $i}}{{else}},{{end}}{{end}}]}"
 				}
 			},
 			"references": [
@@ -385,7 +387,7 @@ func autoCreationKibanaDashboard(url string, hostname_device string, ifacesList 
 				"title": "ifaces-stats-*",
 				"timeFieldName": "timestamp",
 				"fields": "[{\"name\":\"_id\",\"type\":\"string\",\"esTypes\":[\"_id\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":false},{\"name\":\"_index\",\"type\":\"string\",\"esTypes\":[\"_index\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":false},{\"name\":\"_score\",\"type\":\"number\",\"count\":0,\"scripted\":false,\"searchable\":false,\"aggregatable\":false,\"readFromDocValues\":false},{\"name\":\"_source\",\"type\":\"_source\",\"esTypes\":[\"_source\"],\"count\":0,\"scripted\":false,\"searchable\":false,\"aggregatable\":false,\"readFromDocValues\":false},{\"name\":\"_type\",\"type\":\"string\",\"esTypes\":[\"_type\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":false},{\"name\":\"collisions\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"hostname\",\"type\":\"string\",\"esTypes\":[\"keyword\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"iface\",\"type\":\"string\",\"esTypes\":[\"keyword\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"multicast\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_bits\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_bytes\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_crc_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_dropped\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_fifo_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_frame_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_length_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_missed_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_over_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"rx_packets\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"timestamp\",\"type\":\"date\",\"esTypes\":[\"date\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_aborted_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_bits\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_bytes\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_carrier_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_dropped\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_fifo_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_heartbeat_errors\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true},{\"name\":\"tx_packets\",\"type\":\"number\",\"esTypes\":[\"long\"],\"count\":0,\"scripted\":false,\"searchable\":true,\"aggregatable\":true,\"readFromDocValues\":true}]",
-				"fieldFormatMap": "{\"timestamp\":{\"id\":\"date\",\"params\":{\"parsedUrl\":{\"origin\":\"http://localhost:5601\",\"pathname\":\"/app/kibana\",\"basePath\":\"\"}}},\"rx_bytes\":{\"id\":\"bytes\",\"params\":{\"parsedUrl\":{\"origin\":\"http://localhost:5601\",\"pathname\":\"/app/kibana\",\"basePath\":\"\"}}},\"tx_bytes\":{\"id\":\"bytes\",\"params\":{\"parsedUrl\":{\"origin\":\"http://localhost:5601\",\"pathname\":\"/app/kibana\",\"basePath\":\"\"}}}}"
+				"fieldFormatMap": "{\"timestamp\":{\"id\":\"date\",\"params\":{\"parsedUrl\":{\"origin\":\"{{.Url}}\",\"pathname\":\"/app/kibana\",\"basePath\":\"\"}}},\"rx_bytes\":{\"id\":\"bytes\",\"params\":{\"parsedUrl\":{\"origin\":\"{{.Url}}\",\"pathname\":\"/app/kibana\",\"basePath\":\"\"}}},\"tx_bytes\":{\"id\":\"bytes\",\"params\":{\"parsedUrl\":{\"origin\":\"{{.Url}}\",\"pathname\":\"/app/kibana\",\"basePath\":\"\"}}}}"
 			},
 			"references": [],
 			"migrationVersion": {
@@ -513,7 +515,7 @@ func autoCreationKibanaDashboard(url string, hostname_device string, ifacesList 
 		panic(err)
 	}
 	//println(output.String())
-	sendRequest(url, output.Bytes(), "POST")
+	sendRequest(url+"api/kibana/dashboards/import", output.Bytes(), "POST")
 
 }
 
