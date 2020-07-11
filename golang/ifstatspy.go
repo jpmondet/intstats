@@ -119,7 +119,7 @@ func getIfaces(ifaces string) []string {
 		ifacesList = strings.Split(ifaces, ",")
 		return ifacesList
 	}
-	cmd := "ip address show up | grep mtu | cut -f2 -d ':' | cut -f1 -d '@' | tr -d '\n'"
+	cmd := "ip link show up | grep mtu | cut -f2 -d ':' | cut -f1 -d '@' | tr -d '\n'"
 	cmdOutput, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		log.Fatal(err)
