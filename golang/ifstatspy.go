@@ -1,3 +1,9 @@
+// TO FIX:
+// - What about interfaces being shut ? Or Flapping ? -> Should return only zéro-ed json but must try
+// - Randomize sending a lil' bit to prevent synchronization between devices resulting in a burst to the elastic cluster
+// - Some type of virtual interfaces seems to report wrongs stats (Po for exple)
+// - Maybe add an option to let the program use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not at the same time)
+
 package main
 
 import (
@@ -324,6 +330,7 @@ func autoCreationKibanaDashboard(url string, hostname_device string, ifacesList 
 	{
   "objects": [
     {
+			"id": "{{.Hostname}}-{{.Ifaces}}",
 			"type": "dashboard",
 			"attributes": {
 				"title": "ifaces_{{.Hostname}}",
