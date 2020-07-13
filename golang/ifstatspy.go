@@ -1,4 +1,5 @@
 // TO FIX:
+// - Add an option to match interfaces with a pattern (to facilitate usage on switches that have tens of interfaces)
 // - What about interfaces being shut ? Or Flapping ? -> Should return only zéro-ed json but must try
 // - Randomize sending a lil' bit to prevent synchronization between devices resulting in a burst to the elastic cluster
 // - Some type of virtual interfaces seems to report wrongs stats (Po for exple)
