@@ -331,7 +331,7 @@ func autoCreationKibanaDashboard(url string, hostname_device string, ifacesList 
 	{
   "objects": [
     {
-			"id": "{{.Hostname}}-{{.Ifaces}}",
+			"id": "{{.Hostname}}-{{.Length}}",
 			"type": "dashboard",
 			"attributes": {
 				"title": "ifaces_{{.Hostname}}",
