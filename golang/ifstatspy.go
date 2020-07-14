@@ -99,7 +99,7 @@ func main() {
 
 	fmt.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *retrievalInterval, *hostname)
 
-	ifacesList := getIfaces(*ifaces)
+	ifacesList := getIfaces(*ifaces, *netns)
 	fmt.Printf("Ifaces to monitor : %q\n", ifacesList)
 
 	if *hostname == "" {
@@ -120,13 +120,16 @@ func main() {
 
 }
 
-func getIfaces(ifaces string) []string {
+func getIfaces(ifaces string, netns string) []string {
 	if ifaces != "" {
 		var ifacesList []string
 		ifacesList = strings.Split(ifaces, ",")
 		return ifacesList
 	}
 	cmd := "ip link show up | grep mtu | cut -f2 -d ':' | cut -f1 -d '@' | tr -d '\n'"
+	if netns != "" {
+		cmd = "ip netns exec " + netns + " " + cmd
+	}
 	cmdOutput, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		log.Fatal(err)
