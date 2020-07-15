@@ -90,6 +90,7 @@ func main() {
 	elasticIndex := flag.String("x", "ifaces-stats-", "Index on which we must send in Elastic. Default : 'ifaces-stats-' and will add date automatically")
 	netns := flag.String("n", "", "Namespace on which the interfaces should be retrieved")
 	ifaces := flag.String("i", "", "List of interfaces that must be monitored (for example : 'eth0,eth1')\n By default, all the interfaces of the namespace are monitored. \n")
+	ifaces_pattern := flag.String("p", "", "Allows for matching a pattern of ifaces. For example, 'eth' will monitor all ethX ifaces")
 	binary := flag.String("b", "ifstat", "For now, 'ifstat' binary is used to retrieve interface stats. \nYou can specify the path of the binary if you don't want to use the \ndefault binary of your system.")
 	sendInterval := flag.Int("s", 300, "Interval at which bulk requests should be sent to elastic \nDefault : 300 seconds")
 	retrievalInterval := flag.Int("r", 200, "Interval at which stats should be retrieved from interfaces \nDefault : 200 milliseconds")
@@ -99,7 +100,7 @@ func main() {
 
 	fmt.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *retrievalInterval, *hostname)
 
-	ifacesList := getIfaces(*ifaces, *netns)
+	ifacesList := getIfaces(*ifaces, *ifaces_pattern, *netns)
 	fmt.Printf("Ifaces to monitor : %q\n", ifacesList)
 
 	if *hostname == "" {
@@ -120,7 +121,7 @@ func main() {
 
 }
 
-func getIfaces(ifaces string, netns string) []string {
+func getIfaces(ifaces string, ifaces_pattern string, netns string) []string {
 	if ifaces != "" {
 		var ifacesList []string
 		ifacesList = strings.Split(ifaces, ",")
@@ -134,7 +135,17 @@ func getIfaces(ifaces string, netns string) []string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return strings.Split(strings.TrimSpace(string(cmdOutput)), " ")
+	ifacesList := strings.Split(strings.TrimSpace(string(cmdOutput)), " ")
+	if ifaces_pattern != "" {
+		var ifacesMatchingList []string
+		for _, iface := range ifacesList {
+			if strings.Contains(iface, ifaces_pattern) {
+				ifacesMatchingList = append(ifacesMatchingList, iface)
+			}
+		}
+		return ifacesMatchingList
+	}
+	return ifacesList
 }
 
 func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, url string, hostname string) {
@@ -548,12 +559,12 @@ func sendRequest(url string, data []byte, method string) {
 		return
 	}
 	if response.StatusCode > 299 {
-		println(url + "  ----> Oops : " + response.Status)
-	}
-
-	_, err = ioutil.ReadAll(response.Body)
-	if err != nil {
-		fmt.Println(err)
+		bodyBytes, errBdy := ioutil.ReadAll(response.Body)
+		if err != nil {
+			fmt.Println(errBdy)
+		}
+		bodyString := string(bodyBytes)
+		println(url + "  ----> Oops : " + response.Status + "........" + bodyString)
 	}
 	response.Body.Close()
 }
