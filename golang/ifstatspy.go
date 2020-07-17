@@ -1,6 +1,5 @@
 // TO FIX:
-// - Add an option to match interfaces with a pattern (to facilitate usage on switches that have tens of interfaces)
-// - What about interfaces being shut ? Or Flapping ? -> Should return only zéro-ed json but must try
+// - Use proper logging
 // - Randomize sending a lil' bit to prevent synchronization between devices resulting in a burst to the elastic cluster
 // - Some type of virtual interfaces seems to report wrongs stats (Po for exple)
 // - Maybe add an option to let the program use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not at the same time)
@@ -107,17 +106,9 @@ func main() {
 		*hostname, _ = os.Hostname()
 	}
 
-	*elasticIndex = *elasticIndex + time.Now().Format("2006-01-02")
-
-	*url = *url + *elasticIndex
-
-	ensureIndexAndMapping(*url)
-
 	autoCreationKibanaDashboard(*kibanaUrl, *hostname, ifacesList)
 
-	*url = *url + "/_bulk"
-
-	ifacesMonitoring(ifacesList, *binary, *netns, *retrievalInterval, *sendInterval, *url, *hostname)
+	ifacesMonitoring(ifacesList, *binary, *netns, *retrievalInterval, *sendInterval, *url, *elasticIndex, *hostname)
 
 }
 
@@ -148,7 +139,7 @@ func getIfaces(ifaces string, ifaces_pattern string, netns string) []string {
 	return ifacesList
 }
 
-func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, url string, hostname string) {
+func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, url string, elasticIndex string, hostname string) {
 	//var ifacesStats map[string]interface{}
 	//ifacesStats = make(map[string]interface{})
 
@@ -195,7 +186,7 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 		//if timeInterval > (sendInterval * 1000) {
 		if (timeInterval - timestamp) < 0 {
 			//go formatAndsendToElastic(ifacesStats)
-			go formatAndsendToElastic(batchSlice, url)
+			go formatAndsendToElastic(batchSlice, url, elasticIndex)
 			timeInterval_t := time.Now()
 			timeInterval_t = timeInterval_t.Add(time.Duration(sendInterval) * time.Second)
 			timeInterval = timeInterval_t.UnixNano() / 1000000
@@ -211,7 +202,7 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 
 //func formatAndsendToElastic(ifacesStats map[string]interface{}) {
 //func formatAndsendToElastic(ifacesStats []map[string]interface{}, url string) {
-func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string) {
+func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticIndex string) {
 	// bulk-line : {"timestamp": 1590824759143, "iface": "tun0", "rx_packets": 21816, "tx_packets": 13997, "rx_bits": 200634104, "tx_bits": 9345912, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0, "multicast": 0, "collisions": 0, "rx_length_errors": 0, "rx_over_errors": 0, "rx_crc_errors": 0, "rx_frame_errors": 0, "rx_fifo_errors": 0, "rx_missed_errors": 0, "tx_aborted_errors": 0, "tx_carrier_errors": 0, "tx_fifo_errors": 0, "tx_heartbeat_errors": 0}
 	var dataToSend []byte
 	var jsonIndexStr = []byte(`{"index":{}}`)
@@ -232,6 +223,14 @@ func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string) {
 
 	dataToSend = append(dataToSend, jsonEndBulkStr...)
 	//fmt.Println(string(dataToSend))
+
+	elasticIndex = elasticIndex + time.Now().Format("2006-01-02")
+
+	url = url + elasticIndex
+
+	ensureIndexAndMapping(url)
+
+	url = url + "/_bulk"
 
 	sendRequest(url, dataToSend, "POST")
 
