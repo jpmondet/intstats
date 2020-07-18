@@ -80,6 +80,12 @@ type bulkLineIntStats struct {
 	Tx_heartbeat_errors float64 `json:"tx_heartbeat_errors"`
 }
 
+var (
+	WarningLogger *log.Logger
+	InfoLogger    *log.Logger
+	ErrorLogger   *log.Logger
+)
+
 func main() {
 	flag.Usage = func() {
 		fmt.Printf("Usage:\n ifstatspy [options] \nOptions:\n")
@@ -95,12 +101,24 @@ func main() {
 	retrievalInterval := flag.Int("r", 200, "Interval at which stats should be retrieved from interfaces \nDefault : 200 milliseconds")
 	hostname := flag.String("h", "", "Hostname of this sender. Will try to discover it by default")
 	kibanaUrl := flag.String("k", "http://127.0.0.1:5601/", "Url of Kibana api")
+	logfile := flag.String("l", "ifstatspy.log", "Specifies on which file to log. By default, logs goes to the current directory in 'ifstatspy.log'")
 	flag.Parse()
 
+	// Init loggers
+	logf, err := os.OpenFile(*logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	InfoLogger = log.New(logf, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
+	WarningLogger = log.New(logf, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
+	ErrorLogger = log.New(logf, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+
 	fmt.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *retrievalInterval, *hostname)
+	InfoLogger.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *retrievalInterval, *hostname)
 
 	ifacesList := getIfaces(*ifaces, *ifaces_pattern, *netns)
 	fmt.Printf("Ifaces to monitor : %q\n", ifacesList)
+	InfoLogger.Printf("Ifaces to monitor : %q\n", ifacesList)
 
 	if *hostname == "" {
 		*hostname, _ = os.Hostname()
@@ -194,8 +212,6 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 			batchSlice = make([]bulkLineIntStats, lenSlice)
 			indexSlice = 0
 		}
-		//tNowAfter := time.Now() // for debug timing
-		//fmt.Println(tNowAfter.Sub(tNowBefore))  // for debug timing
 		time.Sleep(time.Duration(retrievalInterval) * time.Millisecond)
 	}
 }
@@ -214,15 +230,13 @@ func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticI
 	for _, ifaceStats := range ifacesStats {
 		jsonIfaceStats, err := json.Marshal(ifaceStats)
 		if err != nil {
-			fmt.Println(err)
+			ErrorLogger.Println(err)
 		}
-		//fmt.Println(string(dataToSend))
 		bulkLine := append(jsonIndexStr, jsonIfaceStats...)
 		dataToSend = append(dataToSend, bulkLine...)
 	}
 
 	dataToSend = append(dataToSend, jsonEndBulkStr...)
-	//fmt.Println(string(dataToSend))
 
 	elasticIndex = elasticIndex + time.Now().Format("2006-01-02")
 
@@ -233,18 +247,6 @@ func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticI
 	url = url + "/_bulk"
 
 	sendRequest(url, dataToSend, "POST")
-
-	//response, err := http.Post(url, "application/json", bytes.NewBuffer(dataToSend))
-	//if err != nil {
-	//  fmt.Println(err)
-	//}
-	//defer response.Body.Close()
-
-	//body, err := ioutil.ReadAll(response.Body)
-	//if err != nil {
-	//  fmt.Println(err)
-	//}
-	//fmt.Println(string(body))
 }
 
 func (stats *bulkLineIntStats) UnmarshalJSON(b []byte, iface string, timestamp int64, hostname string) error {
@@ -317,8 +319,6 @@ func ensureIndexAndMapping(url string) {
           "tx_heartbeat_errors": {"type": "long"}
       }
   }`)
-	//fmt.Println(indexSettings)
-	//fmt.Println(indexMapping)
 	sendRequest(url, indexSettings, "PUT")
 	sendRequest(url+"/_mapping", indexMapping, "PUT")
 }
@@ -544,7 +544,7 @@ func sendRequest(url string, data []byte, method string) {
 	client := &http.Client{}
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(data))
 	if err != nil {
-		fmt.Println(err)
+		ErrorLogger.Println(err)
 	}
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	if strings.Contains(url, "kibana") {
@@ -552,18 +552,19 @@ func sendRequest(url string, data []byte, method string) {
 	}
 	response, err := client.Do(req)
 	if err != nil {
-		fmt.Println()
-		fmt.Println(err)
-		fmt.Printf("Error while trying to send req to Elastic. Can you join the API ? Passing instead of panic'ing...")
-		return
-	}
-	if response.StatusCode > 299 {
+		ErrorLogger.Println()
+		ErrorLogger.Println(err)
+		ErrorLogger.Printf("Error while trying to send req to Elastic. Can you join the API ? Passing instead of panic'ing...")
+	} else if response.StatusCode > 299 {
 		bodyBytes, errBdy := ioutil.ReadAll(response.Body)
 		if err != nil {
-			fmt.Println(errBdy)
+			ErrorLogger.Println(errBdy)
 		}
 		bodyString := string(bodyBytes)
-		println(url + "  ----> Oops : " + response.Status + "........" + bodyString)
+		WarningLogger.Println(url + "  ----> Oops : " + response.Status + "........" + bodyString)
+		response.Body.Close()
+	} else {
+		response.Body.Close()
 	}
-	response.Body.Close()
+
 }
