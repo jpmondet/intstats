@@ -175,7 +175,7 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 	timeInterval := timeInterval_t.UnixNano() / 1000000
 
 	// Pre-size the slice that will hold the ifaces datas
-	lenSlice := len(ifacesList) * (sendInterval * 1000 / retrievalInterval)
+	lenSlice := len(ifacesList)*(sendInterval*1000/retrievalInterval) + 1
 	//batchSlice  := make([]map[string]interface{}, lenSlice)
 	batchSlice := make([]bulkLineIntStats, lenSlice)
 	indexSlice := 0
