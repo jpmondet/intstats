@@ -1,8 +1,6 @@
 // TO FIX:
-// - Use proper logging
-// - Randomize sending a lil' bit to prevent synchronization between devices resulting in a burst to the elastic cluster
 // - Some type of virtual interfaces seems to report wrongs stats (Po for exple)
-// - Maybe add an option to let the program use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not at the same time)
+// - Maybe add an option to let the program use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not in the same timezone)
 
 package main
 
@@ -13,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -98,6 +97,7 @@ func main() {
 	ifaces_pattern := flag.String("p", "", "Allows for matching a pattern of ifaces. For example, 'eth' will monitor all ethX ifaces")
 	binary := flag.String("b", "ifstat", "For now, 'ifstat' binary is used to retrieve interface stats. \nYou can specify the path of the binary if you don't want to use the \ndefault binary of your system.")
 	sendInterval := flag.Int("s", 300, "Interval at which bulk requests should be sent to elastic \nDefault : 300 seconds")
+	skewRandInterval := flag.Int("w", 5000, "Adds a random time between 0 and this value to the buld requests sent to elastic to avoid ddosing Elastic API. Default : 5000 milliseconds")
 	retrievalInterval := flag.Int("r", 200, "Interval at which stats should be retrieved from interfaces \nDefault : 200 milliseconds")
 	hostname := flag.String("h", "", "Hostname of this sender. Will try to discover it by default")
 	kibanaUrl := flag.String("k", "http://127.0.0.1:5601/", "Url of Kibana api")
@@ -113,8 +113,8 @@ func main() {
 	WarningLogger = log.New(logf, "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
 	ErrorLogger = log.New(logf, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 
-	fmt.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *retrievalInterval, *hostname)
-	InfoLogger.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *retrievalInterval, *hostname)
+	fmt.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *skewRandInterval, *retrievalInterval, *hostname, *logfile)
+	InfoLogger.Printf("Options used : %v, %v, %v, %v, %v, %v, %v, %v, %v, %v\n", *url, *elasticIndex, *netns, *ifaces, *binary, *sendInterval, *skewRandInterval, *retrievalInterval, *hostname, *logfile)
 
 	ifacesList := getIfaces(*ifaces, *ifaces_pattern, *netns)
 	fmt.Printf("Ifaces to monitor : %q\n", ifacesList)
@@ -126,7 +126,7 @@ func main() {
 
 	autoCreationKibanaDashboard(*kibanaUrl, *hostname, ifacesList)
 
-	ifacesMonitoring(ifacesList, *binary, *netns, *retrievalInterval, *sendInterval, *url, *elasticIndex, *hostname)
+	ifacesMonitoring(ifacesList, *binary, *netns, *retrievalInterval, *sendInterval, *skewRandInterval, *url, *elasticIndex, *hostname)
 
 }
 
@@ -157,7 +157,7 @@ func getIfaces(ifaces string, ifaces_pattern string, netns string) []string {
 	return ifacesList
 }
 
-func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, url string, elasticIndex string, hostname string) {
+func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, skewRandInterval int, url string, elasticIndex string, hostname string) {
 	//var ifacesStats map[string]interface{}
 	//ifacesStats = make(map[string]interface{})
 
@@ -204,7 +204,7 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 		//if timeInterval > (sendInterval * 1000) {
 		if (timeInterval - timestamp) < 0 {
 			//go formatAndsendToElastic(ifacesStats)
-			go formatAndsendToElastic(batchSlice, url, elasticIndex)
+			go formatAndsendToElastic(batchSlice, url, elasticIndex, skewRandInterval)
 			timeInterval_t := time.Now()
 			timeInterval_t = timeInterval_t.Add(time.Duration(sendInterval) * time.Second)
 			timeInterval = timeInterval_t.UnixNano() / 1000000
@@ -216,10 +216,10 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 	}
 }
 
-//func formatAndsendToElastic(ifacesStats map[string]interface{}) {
-//func formatAndsendToElastic(ifacesStats []map[string]interface{}, url string) {
-func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticIndex string) {
+func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticIndex string, skewRandInterval int) {
 	// bulk-line : {"timestamp": 1590824759143, "iface": "tun0", "rx_packets": 21816, "tx_packets": 13997, "rx_bits": 200634104, "tx_bits": 9345912, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0, "multicast": 0, "collisions": 0, "rx_length_errors": 0, "rx_over_errors": 0, "rx_crc_errors": 0, "rx_frame_errors": 0, "rx_fifo_errors": 0, "rx_missed_errors": 0, "tx_aborted_errors": 0, "tx_carrier_errors": 0, "tx_fifo_errors": 0, "tx_heartbeat_errors": 0}
+	rand.Seed(time.Now().UnixNano())
+	time.Sleep(time.Duration(rand.Intn(skewRandInterval)) * time.Millisecond)
 	var dataToSend []byte
 	var jsonIndexStr = []byte(`{"index":{}}`)
 	var jsonEndBulkStr = []byte("\n")
