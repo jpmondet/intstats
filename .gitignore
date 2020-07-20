@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.bin
+golang/ifstatspy
+vlang/intstatspy
+*.pdf
+*.json
+*.ndjson
 
 # C extensions
 *.so
@@ -128,3 +133,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# Archived files
+golang/intstatStruct.go
+ifstat_usage
