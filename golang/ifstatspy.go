@@ -1,6 +1,7 @@
 // TO FIX:
+// - Maybe add an option to let the program try to use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not in the same timezone)
 // - Some type of virtual interfaces seems to report wrongs stats (Po for exple)
-// - Maybe add an option to let the program use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not in the same timezone)
+// - Remove the dependency to ifstat binary
 
 package main
 
@@ -19,37 +20,6 @@ import (
 	"text/template"
 	"time"
 )
-
-type IntStats struct {
-	Rx_packets          float64 `json:"rx_packets"`
-	Tx_packets          float64 `json:"tx_packets"`
-	Rx_bytes            float64 `json:"rx_bytes"`
-	Tx_bytes            float64 `json:"tx_bytes"`
-	Rx_errors           float64 `json:"rx_errors"`
-	Tx_errors           float64 `json:"tx_errors"`
-	Rx_dropped          float64 `json:"rx_dropped"`
-	Tx_dropped          float64 `json:"tx_dropped"`
-	Multicast           float64 `json:"multicast"`
-	Collisions          float64 `json:"collisions"`
-	Rx_length_errors    float64 `json:"rx_length_errors"`
-	Rx_over_errors      float64 `json:"rx_over_errors"`
-	Rx_crc_errors       float64 `json:"rx_crc_errors"`
-	Rx_frame_errors     float64 `json:"rx_frame_errors"`
-	Rx_fifo_errors      float64 `json:"rx_fifo_errors"`
-	Rx_missed_errors    float64 `json:"rx_missed_errors"`
-	Tx_aborted_errors   float64 `json:"tx_aborted_errors"`
-	Tx_carrier_errors   float64 `json:"tx_carrier_errors"`
-	Tx_fifo_errors      float64 `json:"tx_fifo_errors"`
-	Tx_heartbeat_errors float64 `json:"tx_heartbeat_errors"`
-}
-
-type IfaceStats struct {
-	IfaceStats map[string]IntStats
-}
-
-type KernelStats struct {
-	Kernel map[string]IfaceStats `json:"kernel"`
-}
 
 type bulkLineIntStats struct {
 	Timestamp           int64   `json:"timestamp"`
