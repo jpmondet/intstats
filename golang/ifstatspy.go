@@ -19,6 +19,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/beevik/ntp"
 )
 
 type bulkLineIntStats struct {
@@ -72,6 +74,8 @@ func main() {
 	hostname := flag.String("h", "", "Hostname of this sender. Will try to discover it by default")
 	kibanaUrl := flag.String("k", "http://127.0.0.1:5601/", "Url of Kibana api")
 	logfile := flag.String("l", "ifstatspy.log", "Specifies on which file to log. By default, logs goes to the current directory in 'ifstatspy.log'")
+	useNtp := flag.Bool("t", false, "Indicates if we should use an ntp serv or not. By default, we don't, we use local host time.")
+	ntpSrv := flag.String("ntp", "pool.ntp.org", "If the flag 'useNtp' is used, here the server can be specified can be specified. Defaults to pool.ntp.org")
 	flag.Parse()
 
 	// Init loggers
@@ -92,6 +96,21 @@ func main() {
 
 	if *hostname == "" {
 		*hostname, _ = os.Hostname()
+	}
+
+	if *useNtp {
+		ntpTime, err := ntp.Time(*ntpSrv)
+		if err != nil {
+			ErrorLogger.Println(err)
+		}
+		ntpTimeFormatted := ntpTime.Format(time.UnixDate)
+
+		fmt.Printf("Network time: %v\n", ntpTime)
+		fmt.Printf("Unix Date Network time: %v\n", ntpTimeFormatted)
+		fmt.Println("+++++++++++++++++++++++++++++++")
+		timeFormatted := time.Now().Local().Format(time.UnixDate)
+		fmt.Printf("System time: %v\n", time.Now())
+		fmt.Printf("Unix Date System time: %v\n", timeFormatted)
 	}
 
 	autoCreationKibanaDashboard(*kibanaUrl, *hostname, ifacesList)
