@@ -98,24 +98,9 @@ func main() {
 		*hostname, _ = os.Hostname()
 	}
 
-	if *useNtp {
-		ntpTime, err := ntp.Time(*ntpSrv)
-		if err != nil {
-			ErrorLogger.Println(err)
-		}
-		ntpTimeFormatted := ntpTime.Format(time.UnixDate)
-
-		fmt.Printf("Network time: %v\n", ntpTime)
-		fmt.Printf("Unix Date Network time: %v\n", ntpTimeFormatted)
-		fmt.Println("+++++++++++++++++++++++++++++++")
-		timeFormatted := time.Now().Local().Format(time.UnixDate)
-		fmt.Printf("System time: %v\n", time.Now())
-		fmt.Printf("Unix Date System time: %v\n", timeFormatted)
-	}
-
 	autoCreationKibanaDashboard(*kibanaUrl, *hostname, ifacesList)
 
-	ifacesMonitoring(ifacesList, *binary, *netns, *retrievalInterval, *sendInterval, *skewRandInterval, *url, *elasticIndex, *hostname)
+	ifacesMonitoring(ifacesList, *binary, *netns, *retrievalInterval, *sendInterval, *skewRandInterval, *url, *elasticIndex, *hostname, *useNtp, *ntpSrv)
 
 }
 
@@ -146,7 +131,7 @@ func getIfaces(ifaces string, ifaces_pattern string, netns string) []string {
 	return ifacesList
 }
 
-func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, skewRandInterval int, url string, elasticIndex string, hostname string) {
+func ifacesMonitoring(ifacesList []string, binary string, netns string, retrievalInterval int, sendInterval int, skewRandInterval int, url string, elasticIndex string, hostname string, useNtp bool, ntpSrv string) {
 	//var ifacesStats map[string]interface{}
 	//ifacesStats = make(map[string]interface{})
 
@@ -157,9 +142,23 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 	} else {
 		ifstat_cmd = binary + options
 	}
-
+	var err error
 	// Calculate time at which we must send to elastic
 	timeInterval_t := time.Now()
+	if useNtp {
+		timeInterval_t, err = ntp.Time(ntpSrv)
+		if err != nil {
+			ErrorLogger.Println(err)
+		}
+		//	ntpTimeFormatted := ntpTime.Format(time.UnixDate)
+
+		//	fmt.Printf("Network time: %v\n", ntpTime)
+		//	fmt.Printf("Unix Date Network time: %v\n", ntpTimeFormatted)
+		//	fmt.Println("+++++++++++++++++++++++++++++++")
+		//	timeFormatted := time.Now().Local().Format(time.UnixDate)
+		//	fmt.Printf("System time: %v\n", time.Now())
+		//	fmt.Printf("Unix Date System time: %v\n", timeFormatted)
+	}
 	timeInterval_t = timeInterval_t.Add(time.Duration(sendInterval) * time.Second)
 	timeInterval := timeInterval_t.UnixNano() / 1000000
 
@@ -175,7 +174,14 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 		//tNowBefore := time.Now()  // for debug timing
 
 		// Time of the sample
-		timestamp := time.Now().UnixNano() / 1000000
+		timenow := time.Now()
+		if useNtp {
+			timenow, err = ntp.Time(ntpSrv)
+			if err != nil {
+				ErrorLogger.Println(err)
+			}
+		}
+		timestamp := timenow.UnixNano() / 1000000
 
 		for _, iface := range ifacesList {
 			ifstatCmd := ifstat_cmd + iface
@@ -193,8 +199,14 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 		//if timeInterval > (sendInterval * 1000) {
 		if (timeInterval - timestamp) < 0 {
 			//go formatAndsendToElastic(ifacesStats)
-			go formatAndsendToElastic(batchSlice, url, elasticIndex, skewRandInterval)
+			go formatAndsendToElastic(batchSlice, url, elasticIndex, skewRandInterval, useNtp, ntpSrv)
 			timeInterval_t := time.Now()
+			if useNtp {
+				timeInterval_t, err = ntp.Time(ntpSrv)
+				if err != nil {
+					ErrorLogger.Println(err)
+				}
+			}
 			timeInterval_t = timeInterval_t.Add(time.Duration(sendInterval) * time.Second)
 			timeInterval = timeInterval_t.UnixNano() / 1000000
 			//batchSlice = make([]map[string]interface{}, lenSlice)
@@ -205,7 +217,7 @@ func ifacesMonitoring(ifacesList []string, binary string, netns string, retrieva
 	}
 }
 
-func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticIndex string, skewRandInterval int) {
+func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticIndex string, skewRandInterval int, useNtp bool, ntpSrv string) {
 	// bulk-line : {"timestamp": 1590824759143, "iface": "tun0", "rx_packets": 21816, "tx_packets": 13997, "rx_bits": 200634104, "tx_bits": 9345912, "rx_errors": 0, "tx_errors": 0, "rx_dropped": 0, "tx_dropped": 0, "multicast": 0, "collisions": 0, "rx_length_errors": 0, "rx_over_errors": 0, "rx_crc_errors": 0, "rx_frame_errors": 0, "rx_fifo_errors": 0, "rx_missed_errors": 0, "tx_aborted_errors": 0, "tx_carrier_errors": 0, "tx_fifo_errors": 0, "tx_heartbeat_errors": 0}
 	rand.Seed(time.Now().UnixNano())
 	time.Sleep(time.Duration(rand.Intn(skewRandInterval)) * time.Millisecond)
@@ -227,7 +239,15 @@ func formatAndsendToElastic(ifacesStats []bulkLineIntStats, url string, elasticI
 
 	dataToSend = append(dataToSend, jsonEndBulkStr...)
 
-	elasticIndex = elasticIndex + time.Now().Format("2006-01-02")
+	var err error
+	timenow := time.Now()
+	if useNtp {
+		timenow, err = ntp.Time(ntpSrv)
+		if err != nil {
+			ErrorLogger.Println(err)
+		}
+	}
+	elasticIndex = elasticIndex + timenow.Format("2006-01-02")
 
 	url = url + elasticIndex
 
@@ -550,7 +570,7 @@ func sendRequest(url string, data []byte, method string) {
 			ErrorLogger.Println(errBdy)
 		}
 		bodyString := string(bodyBytes)
-		WarningLogger.Println(url + "  ----> Oops : " + response.Status + "........" + bodyString)
+		WarningLogger.Println(url + " ----> Oops : " + response.Status + "........" + bodyString)
 		response.Body.Close()
 	} else {
 		response.Body.Close()
