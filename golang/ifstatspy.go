@@ -1,5 +1,4 @@
 // TO FIX:
-// - Maybe add an option to let the program try to use ntp instead of local time (which is often incorrect due to timezones & stuff <- especially when Elastic cluster is not in the same timezone)
 // - Some type of virtual interfaces seems to report wrongs stats (Po for exple)
 // - Remove the dependency to ifstat binary
 
